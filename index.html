@@ -2,20 +2,16 @@
 <html>
 
 <head>
-	<title>HTML 5 Geolocation Demo</title>
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-    <style type="text/css">
+   <title>HTML 5 Geolocation Demo</title>
+   <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+   <style type="text/css">
       html { height: 100% }
       body { height: 100%; margin: 0; padding: 0 }
       #map_canvas { height: 100% }
-    </style>
-<script src="https://maps.googleapis.com/maps/api/js?sensor=true&key=AIzaSyDwCC09mLshIBjzZDker5SdSFw9iA54n_E" type="text/javascript"></script>
+   </style>
 
-<script type="text/javascript">
-
-// Geolocation with HTML 5 and Google Maps API based on example from maxheapsize: http://maxheapsize.com/2009/04/11/getting-the-browsers-geolocation-with-html-5/
-//
-// This script is by Merge Database and Design, http://merged.ca/ -- if you use some, all, or any of this code, please offer a return link.
+   <script src="https://maps.googleapis.com/maps/api/js?sensor=true&key=AIzaSyDwCC09mLshIBjzZDker5SdSFw9iA54n_E" type="text/javascript"></script>
+   <script type="text/javascript">
 
 var map;
 var mapCenter
@@ -25,14 +21,14 @@ var fakeLongitude;
 var infowindow = new google.maps.InfoWindow({maxWidth: 60});
 var marker;
 var zoom_level = 16;
-var elevator;
-var position;
+var elevator = new google.maps.ElevationService();
 var global_position;
+var google_elevation;
+var global_address;
 
 function initialize() 
 {	
 	geocoder = new google.maps.Geocoder();
-  	elevator = new google.maps.ElevationService();
 
 	if (navigator.geolocation) 
 	{
@@ -46,7 +42,7 @@ function initialize()
 			// for (key in position.coords) {alert(key)}
 			global_position = position;
 
-			mapServiceProvider(position.coords.latitude,position.coords.longitude, position);
+			mapServiceProvider(position.coords.latitude,position.coords.longitude);
  			
  		}, // next function is the error callback
  			function (error)
@@ -66,7 +62,7 @@ function initialize()
  						alert ('Unknown error');
  						break;
  				}
- 			},{'enableHighAccuracy':true,'timeout':10000,'maximumAge':0}
+ 			},{'enableHighAccuracy':true,'timeout':20000,'maximumAge':0}
  		);
  	} 
  	else 
@@ -81,43 +77,37 @@ function initialize()
 	}  
 }
 
-function mapServiceProvider(latitude,longitude,position)
+function mapServiceProvider(latitude,longitude)
 {
-  mapThisGoogle(latitude,longitude,position);
+  mapThisGoogle(latitude,longitude);
 }
 
 function mapThisGoogle(latitude,longitude)
 {
-//	var mapCenter = new GLatLng(latitude,longitude);
-//	map = new GMap2(document.getElementById("map"));
-//	map.setCenter(mapCenter, 15);
-//	map.addOverlay(new GMarker(mapCenter));
+   var latlng = new google.maps.LatLng(latitude, longitude);	
 
-	var latlng = new google.maps.LatLng(latitude, longitude);	
-
-     var mapOptions = {
+   var mapOptions = {
           center: latlng,
           zoom: zoom_level,
           //mapTypeId: google.maps.MapTypeId.ROADMAP
           mapTypeId: google.maps.MapTypeId.HYBRID
-        };
-        map = new google.maps.Map(document.getElementById("map_canvas"),
-            mapOptions);
+   };
+   map = new google.maps.Map(document.getElementById("map_canvas"),
+         mapOptions);
 
-
-	// Start up a new reverse geocoder for addresses?
-	//getElevation(google.maps.LatLng(latitude, longitude));
-	codeLatLng(latlng, position);
+   // Start up a new reverse geocoder for addresses?
+   codeLatLng(latlng);
 
 }
 
-function codeLatLng(latlng, position) {
-
+function codeLatLng(latlng) {
 
     geocoder.geocode({'latLng': latlng}, function(results, status) {
       if (status == google.maps.GeocoderStatus.OK) {
         if (results[0]) {
-          addMarker(latlng, results[0], position)
+          console.log("Got address: " + results[0].formatted_address);
+          global_address = results[0].formatted_address;
+          getElevation(latlng, results[0].formatted_address);
           //infowindow.setContent(results[0].formatted_address);
         }
       } else {
@@ -127,28 +117,67 @@ function codeLatLng(latlng, position) {
 }
 
 
-function addMarker(latlng, address,position) {
+function getElevation(latlng, address) {
+
+   var locations = [];
+
+   locations.push(latlng);
+
+   var positionalRequest = {
+      'locations': locations
+   }
+
+   console.log("Getting elevation");
+
+// Initiate the location request
+  elevator.getElevationForLocations(positionalRequest, function(results, status, address) {
+    if (status == google.maps.ElevationStatus.OK) {
+
+      // Retrieve the first result
+      if (results[0]) {
+        // Open an info window indicating the elevation at the clicked position
+        google_elevation = results[0].elevation;
+        console.log("Elevation: " + results[0].elevation);
+	addMarker(latlng, address, results[0].elevation);
+      } else {
+        alert("No results found");
+        console.log("No elevation results found");
+      }
+    } else {
+      alert("Elevation service failed due to: " + status);
+      console.log("Elevation service failed due to: " + status);
+    }
+  });
+}
+
+
+function addMarker(latlng, address, elevation) {
    var info_content;
+
    map.setZoom(zoom_level);
    marker = new google.maps.Marker({
       position: latlng,
       map: map
    });
-   info_content = "<b>Address:</b> " + address.formatted_address + "<br>";
-   info_content += "<b>latitude:</b>"+ (global_position.coords.latitude).toFixed(5) +"<br>"+
-        "<b>longitude:</b>"+ (global_position.coords.longitude).toFixed(5) +"<br>"+
-        "<b>accuracy:</b>"+ (global_position.coords.accuracy).toFixed(0) +" meters";
+   info_content = "<b>Address:</b> " + global_address + "<br>";
+   info_content += "<b>Latitude:</b>"+ (global_position.coords.latitude).toFixed(5) +"<br>"+
+        "<b>Longitude:</b>"+ (global_position.coords.longitude).toFixed(5) +"<br>"+
+        "<b>Accuracy:</b>"+ (global_position.coords.accuracy).toFixed(0) +" meters";
 
    if(global_position.coords.altitude) {
-      info_content += "<br>altitude:"+ global_position.coords.altitude +"<br>"+
-        "altitudeAccuracy:"+ global_position.coords.altitudeAccuracy +"<br>";
+      info_content += "<br/><b>GPS Altitude:</b> "+ global_position.coords.altitude +
+        "<br/><b>GPS altitudeAccuracy:</b> "+ global_position.coords.altitudeAccuracy;
+   }
+
+   if(elevation) {
+      info_content += "<br><b>GAltitude:</b> " + elevation.toFixed(2) + " meters";
    }
 
    if(global_position.coords.heading) {
-      info_content += "heading:"+ global_position.coords.heading +"<br>";
+      info_content += "<br>Heading:"+ global_position.coords.heading;
    }
    if(global_position.coords.speed) {
-      info_content +=  "speed:"+ global_position.coords.speed +"";
+      info_content +=  "<br>Speed:"+ global_position.coords.speed +"";
    }
 
    infowindow.setContent(info_content);
@@ -166,34 +195,21 @@ function addAddressToMap(response)
 	}
 }
 
-function getElevation(latLng) {
-
-}
 </script>
 
 </head>
 
 <body onload="setTimeout('initialize()',500);">
 
-<!--<script src="http://maps.google.com/maps?file=api&amp;v=3&amp;sensor=false&amp;key=AIzaSyDwCC09mLshIBjzZDker5SdSFw9iA54n_E" type="text/javascript"></script>-->
+   <div class="mapblock">    
+      <div id="map_canvas" style="width:100%; height: 75%"></div>
+      <div id="location_info></div>
 
-<!--<script type="text/javascript" src="http://api.maps.yahoo.com/ajaxymap?v=3.8&appid=n2wY9mzV34Hsdslq6TJoeoJDLmAfzeBamSwJX7jBGLnjM7oDX7fU.Oe91KwUbOwqzvc-"></script>-->
+      <p id="address">Fetching your location with HTML 5 geolocation...</p>
 
-
-
-
-
-		<div class="mapblock">    
-			<div id="map_canvas" style="width:100%; height: 75%"></div>
-			<div id="location_info></div>
-
-			<p id="address">Fetching your location with HTML 5 geolocation...</p>
-
-			<p>This is a quick demonstration of the proposed <a href="http://dev.w3.org/geo/api/spec-source.html">HTML 5 standard for a Geolocation API</a>.</p>
+      <p>This is a quick demonstration of the proposed <a href="http://dev.w3.org/geo/api/spec-source.html">HTML 5 standard for a Geolocation API</a>.</p>
 			
-			<p>If your browser does not support geolocation, but you do have a GPS unit in your browsing device, you can try the newest version of <a href="http://getfirefox.com/">Firefox</a> or <a href="https://addons.mozilla.org/en-US/firefox/addon/8420">a geolocation addon</a> for older versions of Firefox. Both will fallback on other options for geolocation (IP address, WiFi networks in your area) if you do not have a GPS device installed. <a href="http://www.google.com/chrome">Google Chrome</a> is also an HTML 5 geolocation aware browser.</p>
+      <p>If your browser does not support geolocation, but you do have a GPS unit in your browsing device, you can try the newest version of <a href="http://getfirefox.com/">Firefox</a> or <a href="https://addons.mozilla.org/en-US/firefox/addon/8420">a geolocation addon</a> for older versions of Firefox. Both will fallback on other options for geolocation (IP address, WiFi networks in your area) if you do not have a GPS device installed. <a href="http://www.google.com/chrome">Google Chrome</a> is also an HTML 5 geolocation aware browser.</p>
 			
 </body>
-
 </html>
-
